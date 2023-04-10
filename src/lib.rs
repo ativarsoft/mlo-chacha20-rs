@@ -561,7 +561,7 @@ pub fn keystream_bytes(handle: *mut ChaCha20, stream: *mut u8, bytes: usize) {
 #[cfg(test)]
 pub mod tests {
 
-    use super::chacha20::*;
+    use super::*;
 
     extern "C" {
         fn malloc(bytes: usize) -> *mut u8;
