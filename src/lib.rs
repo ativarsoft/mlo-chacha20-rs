@@ -365,184 +365,184 @@ impl ChaCha20 {
         self.input[3] = u8_to_u32_little(&constants[(4 * 3) .. (4 * 4)]);
     }
 
-        pub fn iv_setup(&mut self, iv: &[u8]) {
-            let iv_slice: &[u8] = &iv[0 .. 12];
-            self.input[13] = u8_to_u32_little(&iv_slice[(4 * 0) .. (4 * 1)]);
-            self.input[14] = u8_to_u32_little(&iv_slice[(4 * 1) .. (4 * 2)]);
-            self.input[15] = u8_to_u32_little(&iv_slice[(4 * 2) .. (4 * 3)]);
+    pub fn iv_setup(&mut self, iv: &[u8]) {
+        let iv_slice: &[u8] = &iv[0 .. 12];
+        self.input[13] = u8_to_u32_little(&iv_slice[(4 * 0) .. (4 * 1)]);
+        self.input[14] = u8_to_u32_little(&iv_slice[(4 * 1) .. (4 * 2)]);
+        self.input[15] = u8_to_u32_little(&iv_slice[(4 * 2) .. (4 * 3)]);
+    }
+
+    pub fn block_counter_setup(&mut self, block_counter: u32) {
+        self.input[12] = block_counter;
+    }
+
+    fn allocate_memory(&self, bytes: usize) -> &'static mut [u8] {
+        let buffer: *mut u8 = unsafe { (self.malloc)(bytes) };
+        let buffer_slice: &mut [u8] = unsafe {
+            core::slice::from_raw_parts_mut(buffer, bytes)
+        };
+        let mut iterator = buffer_slice.iter_mut();
+        for c in iterator.next() {
+            *c = 0;
         }
+        return buffer_slice;
+    }
 
-        pub fn block_counter_setup(&mut self, block_counter: u32) {
-            self.input[12] = block_counter;
-        }
+    pub fn new(malloc: Allocator, free: Free) -> Self {
+        return ChaCha20 {
+            malloc: malloc,
+            free: free,
+            input: [0; 16],
+        };
+    }
 
-        fn allocate_memory(&self, bytes: usize) -> &'static mut [u8] {
-            let buffer: *mut u8 = unsafe { (self.malloc)(bytes) };
-            let buffer_slice: &mut [u8] = unsafe {
-                core::slice::from_raw_parts_mut(buffer, bytes)
-            };
-            let mut iterator = buffer_slice.iter_mut();
-            for c in iterator.next() {
-                *c = 0;
-            }
-            return buffer_slice;
-        }
+    pub fn pad<'a>(&self, buffer: &'a [u8]) -> &'a [u8] {
+        return if buffer.len() % 4 == 0 {
+            buffer
+        } else {
+            let len: usize = (buffer.len() >> 2) << 2  + 4;
 
-        pub fn new(malloc: Allocator, free: Free) -> Self {
-            return ChaCha20 {
-                malloc: malloc,
-                free: free,
-                input: [0; 16],
-            };
-        }
-
-        pub fn pad<'a>(&self, buffer: &'a [u8]) -> &'a [u8] {
-            return if buffer.len() % 4 == 0 {
-                buffer
-            } else {
-                let len: usize = (buffer.len() >> 2) << 2  + 4;
-
-                let output: &mut [u8] = self.allocate_memory(len);
-                let mut output_iterator = output.iter_mut();
-                for input_character in buffer {
-                    let output_character = match output_iterator.next() {
-                        Some(c) => c,
-                        None => panic!(),
-                    };
-                    *output_character = *input_character;
+            let output: &mut [u8] = self.allocate_memory(len);
+            let mut output_iterator = output.iter_mut();
+            for input_character in buffer {
+                let output_character = match output_iterator.next() {
+                    Some(c) => c,
+                    None => panic!(),
                 };
-                output
-            }
-        }
-
-        pub fn test_quarter_round() -> bool {
-            assert_eq!(rotate_left(0xaabbccdd, 8), 0xbbccddaa);
-            let input: [u32; 16] = [
-                0x879531e0, 0xc5ecf37d, 0x516461b1, 0xc9a62f8a,
-                0x44c20ef3, 0x3390af7f, 0xd9fc690b, 0x2a5f714c,
-                0x53372767, 0xb00a5631, 0x974c541a, 0x359e9963,
-                0x5c971061, 0x3d631689, 0x2098d9d6, 0x91dbd320,
-            ];
-            let output = quarter_round(input, 2, 7, 8, 13);
-            let expected_matrix = [
-                0x879531e0, 0xc5ecf37d, 0xbdb886dc, 0xc9a62f8a,
-                0x44c20ef3, 0x3390af7f, 0xd9fc690b, 0xcfacafd2,
-                0xe46bea80, 0xb00a5631, 0x974c541a, 0x359e9963,
-                0x5c971061, 0xccc07c79, 0x2098d9d6, 0x91dbd320,
-            ];
-            if output != expected_matrix {
-                assert_eq!(output, expected_matrix);
-                return false;
-            }
-            return true;
-        }
-
-        pub fn check_state(&self, input: &[u32]) -> bool {
-            let rc: bool = if self.input == input {
-                true
-            } else {
-                false
+                *output_character = *input_character;
             };
-            return rc;
-        }
-
-        /*
-         * Tests
-         */
-
-        /*
-         * These tests use the test vectors on the top of this file.
-         */
-
-        pub fn test1(malloc: Allocator, free: Free) {
-            let key: &[u8] = &TEST1_KEY;
-            let iv: &[u8] = &TEST1_IV;
-            let block_counter: u32 = TEST1_INITIAL_BLOCK_COUNTER;
-            let mut m: [u8; 64] = [0; 64];
-            let mut c: [u8; 64] = [0; 64];
-            let mut obj = ChaCha20::new(malloc, free);
-            obj.key_setup(key, 256, 0);
-            obj.iv_setup(&iv[0 .. 12]);
-            obj.block_counter_setup(block_counter);
-            let len: usize = m.len();
-            obj.encrypt_bytes(&mut m, &mut c, len);
-            let current_state: [u32; 16] = obj.dump_state();
-            assert_eq!(c, *&TEST1_EXPECTED_CYPHERTEXT);
-        }
-
-        pub fn test2(malloc: Allocator, free: Free) {
-            let mut key: [u8; 32] = [0; 32];
-            key[31] = 1;
-            let mut iv: [u8; 12] = [0; 12];
-            iv[11] = 2;
-            let block_counter: u32 = 1;
-            let mut obj = ChaCha20::new(malloc, free);
-            let plaintext: &[u8] = &TEST2_PLAINTEXT;
-            let m: &[u8] = obj.pad(plaintext);
-            let mut c: &mut [u8] = obj.allocate_memory(m.len());
-            obj.key_setup(&key[0 .. 32], 256, 0);
-            obj.iv_setup(&iv[0 .. 12]);
-            obj.block_counter_setup(block_counter);
-            let len: usize = plaintext.len();
-            assert_eq!(len, 375);
-            obj.encrypt_bytes(m, c, len);
-            let expected_cyphertext = TEST2_EXPECTED_CYPHERTEXT;
-            assert_eq!(c[0 .. plaintext.len()], expected_cyphertext);
-        }
-
-        pub fn test3(malloc: Allocator, free: Free) {
-            let mut key: &[u8] = &TEST3_KEY;
-            let mut iv: &[u8] = &TEST3_IV;
-            let block_counter: u32 = TEST3_INITIAL_BLOCK_COUNTER;
-            let mut obj = ChaCha20::new(malloc, free);
-            let plaintext: &[u8] = &TEST3_PLAINTEXT;
-            let m: &[u8] = obj.pad(plaintext);
-            let mut c: &mut [u8] = obj.allocate_memory(m.len());
-            obj.key_setup(&key[0 .. 32], 256, 0);
-            obj.iv_setup(&iv[0 .. 12]);
-            obj.block_counter_setup(block_counter);
-            let len: usize = plaintext.len();
-            assert_eq!(len, 127);
-            obj.encrypt_bytes(m, c, len);
-            let expected_cyphertext = TEST3_EXPECTED_CYPHERTEXT;
-            assert_eq!(c[0 .. plaintext.len()], expected_cyphertext);
+            output
         }
     }
 
-    pub fn key_setup(handle: *mut ChaCha20, k: *const u8, k_bits: usize, _iv_bits: usize) {
-        assert_ne!(handle as usize, 0);
-        assert_eq!(k_bits % 8, 0);
-        let k_slice = unsafe { core::slice::from_raw_parts(k, k_bits / 8) };
-        let obj: &mut ChaCha20 = unsafe { &mut *handle };
-        obj.key_setup(k_slice, k_bits, _iv_bits);
+    pub fn test_quarter_round() -> bool {
+        assert_eq!(rotate_left(0xaabbccdd, 8), 0xbbccddaa);
+        let input: [u32; 16] = [
+            0x879531e0, 0xc5ecf37d, 0x516461b1, 0xc9a62f8a,
+            0x44c20ef3, 0x3390af7f, 0xd9fc690b, 0x2a5f714c,
+            0x53372767, 0xb00a5631, 0x974c541a, 0x359e9963,
+            0x5c971061, 0x3d631689, 0x2098d9d6, 0x91dbd320,
+        ];
+        let output = quarter_round(input, 2, 7, 8, 13);
+        let expected_matrix = [
+            0x879531e0, 0xc5ecf37d, 0xbdb886dc, 0xc9a62f8a,
+            0x44c20ef3, 0x3390af7f, 0xd9fc690b, 0xcfacafd2,
+            0xe46bea80, 0xb00a5631, 0x974c541a, 0x359e9963,
+            0x5c971061, 0xccc07c79, 0x2098d9d6, 0x91dbd320,
+        ];
+        if output != expected_matrix {
+            assert_eq!(output, expected_matrix);
+            return false;
+        }
+        return true;
     }
 
-    pub fn iv_setup(handle: *mut ChaCha20, iv: *const u8) {
-        assert_ne!(handle as usize, 0);
-        assert_ne!(iv as usize, 0);
-        let iv_slice = unsafe { core::slice::from_raw_parts(iv, 12) };
-        let obj: &mut ChaCha20 = unsafe { &mut *handle };
-        obj.iv_setup(iv_slice);
-    }
-
-    pub fn block_counter_setup(handle: *mut ChaCha20, block_counter: u32) {
-        assert_ne!(handle as usize, 0);
-        let obj: &mut ChaCha20 = unsafe { &mut *handle };
-            obj.block_counter_setup(block_counter);
-    }
-
-    pub fn encrypt_bytes(handle: *mut ChaCha20, m: *const u8, c: *mut u8, bytes: usize) {
-        let m_slice = unsafe {
-            core::slice::from_raw_parts_mut(m as *mut u8, bytes)
+    pub fn check_state(&self, input: &[u32]) -> bool {
+        let rc: bool = if self.input == input {
+            true
+        } else {
+            false
         };
-        let c_slice = unsafe {
-            core::slice::from_raw_parts_mut(c, bytes)
-        };
-        let obj: &mut ChaCha20 = unsafe {
-            &mut *handle
-        };
-        obj.encrypt_bytes(m_slice, c_slice, bytes);
+        return rc;
     }
+
+    /*
+     * Tests
+     */
+
+    /*
+     * These tests use the test vectors on the top of this file.
+     */
+
+    pub fn test1(malloc: Allocator, free: Free) {
+        let key: &[u8] = &TEST1_KEY;
+        let iv: &[u8] = &TEST1_IV;
+        let block_counter: u32 = TEST1_INITIAL_BLOCK_COUNTER;
+        let mut m: [u8; 64] = [0; 64];
+        let mut c: [u8; 64] = [0; 64];
+        let mut obj = ChaCha20::new(malloc, free);
+        obj.key_setup(key, 256, 0);
+        obj.iv_setup(&iv[0 .. 12]);
+        obj.block_counter_setup(block_counter);
+        let len: usize = m.len();
+        obj.encrypt_bytes(&mut m, &mut c, len);
+        let current_state: [u32; 16] = obj.dump_state();
+        assert_eq!(c, *&TEST1_EXPECTED_CYPHERTEXT);
+    }
+
+    pub fn test2(malloc: Allocator, free: Free) {
+        let mut key: [u8; 32] = [0; 32];
+        key[31] = 1;
+        let mut iv: [u8; 12] = [0; 12];
+        iv[11] = 2;
+        let block_counter: u32 = 1;
+        let mut obj = ChaCha20::new(malloc, free);
+        let plaintext: &[u8] = &TEST2_PLAINTEXT;
+        let m: &[u8] = obj.pad(plaintext);
+        let mut c: &mut [u8] = obj.allocate_memory(m.len());
+        obj.key_setup(&key[0 .. 32], 256, 0);
+        obj.iv_setup(&iv[0 .. 12]);
+        obj.block_counter_setup(block_counter);
+        let len: usize = plaintext.len();
+        assert_eq!(len, 375);
+        obj.encrypt_bytes(m, c, len);
+        let expected_cyphertext = TEST2_EXPECTED_CYPHERTEXT;
+        assert_eq!(c[0 .. plaintext.len()], expected_cyphertext);
+    }
+
+    pub fn test3(malloc: Allocator, free: Free) {
+        let mut key: &[u8] = &TEST3_KEY;
+        let mut iv: &[u8] = &TEST3_IV;
+        let block_counter: u32 = TEST3_INITIAL_BLOCK_COUNTER;
+        let mut obj = ChaCha20::new(malloc, free);
+        let plaintext: &[u8] = &TEST3_PLAINTEXT;
+        let m: &[u8] = obj.pad(plaintext);
+        let mut c: &mut [u8] = obj.allocate_memory(m.len());
+        obj.key_setup(&key[0 .. 32], 256, 0);
+        obj.iv_setup(&iv[0 .. 12]);
+        obj.block_counter_setup(block_counter);
+        let len: usize = plaintext.len();
+        assert_eq!(len, 127);
+        obj.encrypt_bytes(m, c, len);
+        let expected_cyphertext = TEST3_EXPECTED_CYPHERTEXT;
+        assert_eq!(c[0 .. plaintext.len()], expected_cyphertext);
+    }
+}
+
+pub fn key_setup(handle: *mut ChaCha20, k: *const u8, k_bits: usize, _iv_bits: usize) {
+    assert_ne!(handle as usize, 0);
+    assert_eq!(k_bits % 8, 0);
+    let k_slice = unsafe { core::slice::from_raw_parts(k, k_bits / 8) };
+    let obj: &mut ChaCha20 = unsafe { &mut *handle };
+    obj.key_setup(k_slice, k_bits, _iv_bits);
+}
+
+pub fn iv_setup(handle: *mut ChaCha20, iv: *const u8) {
+    assert_ne!(handle as usize, 0);
+    assert_ne!(iv as usize, 0);
+    let iv_slice = unsafe { core::slice::from_raw_parts(iv, 12) };
+    let obj: &mut ChaCha20 = unsafe { &mut *handle };
+    obj.iv_setup(iv_slice);
+}
+
+pub fn block_counter_setup(handle: *mut ChaCha20, block_counter: u32) {
+    assert_ne!(handle as usize, 0);
+    let obj: &mut ChaCha20 = unsafe { &mut *handle };
+        obj.block_counter_setup(block_counter);
+}
+
+pub fn encrypt_bytes(handle: *mut ChaCha20, m: *const u8, c: *mut u8, bytes: usize) {
+    let m_slice = unsafe {
+        core::slice::from_raw_parts_mut(m as *mut u8, bytes)
+    };
+    let c_slice = unsafe {
+        core::slice::from_raw_parts_mut(c, bytes)
+    };
+    let obj: &mut ChaCha20 = unsafe {
+        &mut *handle
+    };
+    obj.encrypt_bytes(m_slice, c_slice, bytes);
+}
 
 pub fn keystream_bytes(handle: *mut ChaCha20, stream: *mut u8, bytes: usize) {
     let stream_slice = unsafe {
