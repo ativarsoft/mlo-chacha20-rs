@@ -2,6 +2,24 @@
 
 #![no_std]
 
+use core::panic::PanicInfo;
+
+extern "C" {
+    fn chacha20_panic_handler();
+}
+
+#[panic_handler]
+fn panic(_info: &PanicInfo) -> ! {
+
+    // The panic handler might send a signal to the process.
+    unsafe {
+        chacha20_panic_handler();
+    }
+
+    loop {}
+
+}
+
 static SIGMA: &'static str = "expand 32-byte k";
 static TAU: &'static str = "expand 16-byte k";
 
