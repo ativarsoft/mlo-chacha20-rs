@@ -191,7 +191,6 @@ static TEST2_EXPECTED_CYPHERTEXT: [u8; 375] =
 
 
 pub type Allocator = unsafe extern "C" fn(bytes: usize) -> *mut u8;
-pub type Free = unsafe extern "C" fn(*mut u8);
 
 //
 // Utility functions
@@ -273,7 +272,6 @@ fn salsa20_word_to_byte(input: [u32; 16]) -> [u8;64] {
 
 pub struct ChaCha20 {
     malloc: Allocator,
-    free: Free,
     input: [u32; 16],
 }
 
@@ -388,10 +386,9 @@ impl ChaCha20 {
         return buffer_slice;
     }
 
-    pub fn new(malloc: Allocator, free: Free) -> Self {
+    pub fn new(malloc: Allocator) -> Self {
         return ChaCha20 {
             malloc: malloc,
-            free: free,
             input: [0; 16],
         };
     }
@@ -454,32 +451,31 @@ impl ChaCha20 {
      * These tests use the test vectors on the top of this file.
      */
 
-    pub fn test1(malloc: Allocator, free: Free) {
+    pub fn test1(malloc: Allocator) {
         let key: &[u8] = &TEST1_KEY;
         let iv: &[u8] = &TEST1_IV;
         let block_counter: u32 = TEST1_INITIAL_BLOCK_COUNTER;
         let mut m: [u8; 64] = [0; 64];
         let mut c: [u8; 64] = [0; 64];
-        let mut obj = ChaCha20::new(malloc, free);
+        let mut obj = ChaCha20::new(malloc);
         obj.key_setup(key, 256, 0);
         obj.iv_setup(&iv[0 .. 12]);
         obj.block_counter_setup(block_counter);
         let len: usize = m.len();
         obj.encrypt_bytes(&mut m, &mut c, len);
-        let current_state: [u32; 16] = obj.dump_state();
         assert_eq!(c, *&TEST1_EXPECTED_CYPHERTEXT);
     }
 
-    pub fn test2(malloc: Allocator, free: Free) {
+    pub fn test2(malloc: Allocator) {
         let mut key: [u8; 32] = [0; 32];
         key[31] = 1;
         let mut iv: [u8; 12] = [0; 12];
         iv[11] = 2;
         let block_counter: u32 = 1;
-        let mut obj = ChaCha20::new(malloc, free);
+        let mut obj = ChaCha20::new(malloc);
         let plaintext: &[u8] = &TEST2_PLAINTEXT;
         let m: &[u8] = obj.pad(plaintext);
-        let mut c: &mut [u8] = obj.allocate_memory(m.len());
+        let c: &mut [u8] = obj.allocate_memory(m.len());
         obj.key_setup(&key[0 .. 32], 256, 0);
         obj.iv_setup(&iv[0 .. 12]);
         obj.block_counter_setup(block_counter);
@@ -490,14 +486,14 @@ impl ChaCha20 {
         assert_eq!(c[0 .. plaintext.len()], expected_cyphertext);
     }
 
-    pub fn test3(malloc: Allocator, free: Free) {
-        let mut key: &[u8] = &TEST3_KEY;
-        let mut iv: &[u8] = &TEST3_IV;
+    pub fn test3(malloc: Allocator) {
+        let key: &[u8] = &TEST3_KEY;
+        let iv: &[u8] = &TEST3_IV;
         let block_counter: u32 = TEST3_INITIAL_BLOCK_COUNTER;
-        let mut obj = ChaCha20::new(malloc, free);
+        let mut obj = ChaCha20::new(malloc);
         let plaintext: &[u8] = &TEST3_PLAINTEXT;
         let m: &[u8] = obj.pad(plaintext);
-        let mut c: &mut [u8] = obj.allocate_memory(m.len());
+        let c: &mut [u8] = obj.allocate_memory(m.len());
         obj.key_setup(&key[0 .. 32], 256, 0);
         obj.iv_setup(&iv[0 .. 12]);
         obj.block_counter_setup(block_counter);
@@ -575,26 +571,23 @@ pub mod tests {
 
     #[test]
     fn test1() {
-        ChaCha20::test1(dummy_allocator, dummy_free);
+        ChaCha20::test1(dummy_allocator);
     }
 
     #[test]
     fn test2() {
-        ChaCha20::test2(malloc, dummy_free);
+        ChaCha20::test2(malloc);
     }
 
     #[test]
     fn test3() {
-        ChaCha20::test3(malloc, dummy_free);
+        ChaCha20::test3(malloc);
     }
 
     extern "C"
     fn dummy_allocator(_bytes: usize) -> *mut u8 {
         return 0 as *mut u8;
     }
-
-    extern "C"
-    fn dummy_free(_ptr: *mut u8) {}
 
 }
 
