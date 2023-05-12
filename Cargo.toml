@@ -2,7 +2,7 @@
 name = "mlo-chacha20-rs"
 description = "Freestanding ChaCha20 cypher"
 license = "MIT"
-version = "0.1.1"
+version = "0.1.2"
 authors = ["Mateus de Lima Oliveira <mateus@ativarsoft.com>"]
 edition = "2018"
 homepage = "https://ativarsoft.com"
