@@ -4,9 +4,9 @@ MLO_CHACHA20_RS=build/libmlo_chacha20_rs.a
 LIBS=$(MLO_CHACHA20_RS)
 BIN=chacha20
 
-all: mlo-chacha20-rs $(BIN)
+all: $(MLO_CHACHA20_RS) $(BIN)
 
-mlo-chacha20-rs:
+$(MLO_CHACHA20_RS):
 	cargo build --release --offline -Z unstable-options --out-dir="build/"
 
 chacha20.o: chacha20.c chacha20.h $(MLO_CHACHA20_RS)
@@ -15,8 +15,9 @@ chacha20.o: chacha20.c chacha20.h $(MLO_CHACHA20_RS)
 chacha20: chacha20.o
 	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^ $(LIBS)
 
-test:
-	RUST_BACKTRACE="1" cargo test
+test: $(BIN)
+	true $(shell ./chacha20)
+	test $(.SHELLSTATUS)
 
 clean:
 	cargo clean
@@ -25,3 +26,4 @@ clean:
 	rm -f $(BIN)
 
 .PHONY: mlo-chacha20-rs test clean
+
